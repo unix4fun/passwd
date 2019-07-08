@@ -7,5 +7,3 @@ Change your import line to the new project host.
 ## Why?
 I want to support [FREE SOFTWARE](https://en.wikipedia.org/wiki/Free_software) and a less centralized corporate controlled ecosystem.
 
-~~# passwd
-A simple golang password hashing package
