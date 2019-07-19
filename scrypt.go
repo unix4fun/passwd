@@ -58,7 +58,7 @@ var (
 		Saltlen: 16,
 		Keylen:  32,
 		// salt
-		masked: false,
+		//Masked: false,
 	}
 
 	scryptParanoidParameters = ScryptParams{
@@ -68,7 +68,7 @@ var (
 		Saltlen: 32,
 		Keylen:  64,
 		// salt
-		masked: false,
+		//Masked: false,
 	}
 )
 
@@ -79,9 +79,8 @@ type ScryptParams struct {
 	P       uint32 // parallelization cost param -> r*p < 2^30 (go implementation specific)
 	Saltlen uint32 // 128 bits min.
 	Keylen  uint32 // 128 bits min.
-	// unexported
-	salt   []byte // my salt..
-	masked bool   // are parameters private
+	Masked  bool   // are parameters private
+	salt    []byte // my salt..
 }
 
 func newScryptParamsFromFields(fields []string) (*ScryptParams, error) {
@@ -89,35 +88,34 @@ func newScryptParamsFromFields(fields []string) (*ScryptParams, error) {
 		return nil, ErrParse
 	}
 
-	//fmt.Printf("ARGON FIELD: %q\n", fields)
 	// salt
 	salt, err := base64Decode([]byte(fields[0])) // process the salt
 	if err != nil {
-		return nil, err
+		return nil, ErrParse
 	}
 	saltlen := uint32(len(salt))
 
 	nint, err := strconv.ParseInt(fields[1], 10, 32)
 	if err != nil {
-		return nil, err
+		return nil, ErrParse
 	}
 	n := uint32(nint)
 
 	rint, err := strconv.ParseInt(fields[2], 10, 32)
 	if err != nil {
-		return nil, err
+		return nil, ErrParse
 	}
 	r := uint32(rint)
 
 	pint, err := strconv.ParseInt(fields[3], 10, 32)
 	if err != nil {
-		return nil, err
+		return nil, ErrParse
 	}
 	p := uint32(pint)
 
 	keylenint, err := strconv.ParseInt(fields[4], 10, 32)
 	if err != nil {
-		return nil, err
+		return nil, ErrParse
 	}
 	keylen := uint32(keylenint)
 
@@ -142,6 +140,14 @@ func (p *ScryptParams) getSalt() error {
 	return nil
 }
 
+func (p *ScryptParams) deriveFromPassword(password []byte) ([]byte, error) {
+	key, err := scrypt.Key(password, p.salt, int(p.N), int(p.R), int(p.P), int(p.Keylen))
+	if err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
 //func (p *ScryptParams) generateFromPassword(password []byte) ([]byte, error) {
 func (p *ScryptParams) generateFromParams(password []byte) ([]byte, error) {
 	var hash bytes.Buffer
@@ -152,7 +158,7 @@ func (p *ScryptParams) generateFromParams(password []byte) ([]byte, error) {
 	salt64 := base64Encode(p.salt)
 
 	// params
-	if !p.masked {
+	if !p.Masked {
 		params = fmt.Sprintf("%c%d%c%d%c%d%c%d",
 			separatorRune, p.N,
 			separatorRune, p.R,
@@ -194,12 +200,18 @@ func (p *ScryptParams) generateFromPassword(password []byte) ([]byte, error) {
 func (p *ScryptParams) compare(hashed, password []byte) error {
 	compared, err := p.generateFromParams(password)
 	if err != nil {
-		return err
+		return ErrMismatch
 	}
 
 	// sanity checks.
+	// we had a subtle bug where a shorter salt with the same
+	// password encrypted would still match, as such you could have
+	// potentially generated thousands of small salted password
+	// to bruteforce and ran against the comparison function to
+	// find a collision which requires less power salts HAVE to
+	// be the same size that's it.
 	hashlen := uint32(len(compared))
-	if uint32(len(hashed)) < hashlen {
+	if uint32(len(hashed)) < hashlen || len(p.salt) != int(p.Saltlen) {
 		return ErrMismatch
 	}
 

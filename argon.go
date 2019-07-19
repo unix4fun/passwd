@@ -56,7 +56,7 @@ var (
 		Saltlen: 16,
 		Keylen:  16,
 		//salt
-		masked: false,
+		//masked: false,
 	}
 
 	// XXX need more test/analysis
@@ -68,7 +68,7 @@ var (
 		Saltlen: 16,
 		Keylen:  32,
 		//salt
-		masked: false,
+		//masked: false,
 	}
 
 	// XXX need more test/analysis
@@ -80,7 +80,7 @@ var (
 		Saltlen: 32,
 		Keylen:  64,
 		//salt
-		masked: false,
+		//masked: false,
 	}
 )
 
@@ -89,12 +89,11 @@ type Argon2Params struct {
 	Version int
 	Time    uint32
 	Memory  uint32
-	Thread  uint8
 	Saltlen uint32
 	Keylen  uint32
-	// unexported
-	salt   []byte // on compare only..
-	masked bool   // are parameters private
+	Thread  uint8
+	Masked  bool   // are parameters private
+	salt    []byte // on compare only..
 }
 
 // [0] password: 'prout' hashed: '$2id$aiOE.rPFUFkkehxc6utWY.$1$65536$8$32$Wv1IMP6xwaqVaQGOX6Oxe.eSEbozeRJLzln8ZlthZfS'
@@ -103,36 +102,35 @@ func newArgon2ParamsFromFields(fields []string) (*Argon2Params, error) {
 		return nil, ErrParse
 	}
 
-	//fmt.Printf("ARGON FIELD: %q\n", fields)
 	// salt
 	salt, err := base64Decode([]byte(fields[0])) // process the salt
 	if err != nil {
-		return nil, err
+		return nil, ErrParse
 	}
 	saltlen := uint32(len(salt))
 
 	// ARGON FIELD: ["mezIC/cmChATxAfFFe9ele" "2" "65536" "8" "32" "omYy81uRZcZv6JkbH17wA0s1CSpH4UQttXBB42oKMXK"]
 	timeint, err := strconv.ParseInt(fields[1], 10, 32)
 	if err != nil {
-		return nil, err
+		return nil, ErrParse
 	}
 	time := uint32(timeint)
 
 	memoryint, err := strconv.ParseInt(fields[2], 10, 32)
 	if err != nil {
-		return nil, err
+		return nil, ErrParse
 	}
 	memory := uint32(memoryint)
 
 	threadint, err := strconv.ParseInt(fields[3], 10, 32)
 	if err != nil {
-		return nil, err
+		return nil, ErrParse
 	}
 	thread := uint8(threadint)
 
 	keylenint, err := strconv.ParseInt(fields[4], 10, 32)
 	if err != nil {
-		return nil, err
+		return nil, ErrParse
 	}
 	keylen := uint32(keylenint)
 
@@ -166,8 +164,15 @@ func (p *Argon2Params) compare(hashed, password []byte) error {
 
 	// yes in case things are padded by mistake depending on storage
 	// whatever.. the params tells us what to verify.
+	//
+	// we had a subtle bug where a shorter salt with the same
+	// password encrypted would still match, as such you could have
+	// potentially generated thousands of small salted password
+	// to bruteforce and ran against the comparison function to
+	// find a collision which requires less power salts HAVE to
+	// be the same size that's it.
 	hashlen := uint32(len(compared))
-	if uint32(len(hashed)) < hashlen {
+	if uint32(len(hashed)) < hashlen || len(p.salt) != int(p.Saltlen) {
 		return ErrMismatch
 	}
 
@@ -179,6 +184,24 @@ func (p *Argon2Params) compare(hashed, password []byte) error {
 	return ErrMismatch
 }
 
+func (p *Argon2Params) deriveFromPassword(password []byte) (key []byte, err error) {
+	err = p.validate(&argonMinParameters)
+	if err != nil {
+		return nil, err
+	}
+
+	switch p.Version {
+	case Argon2i:
+		key = argon2.Key(password, p.salt, p.Time, p.Memory, p.Thread, p.Keylen)
+	case Argon2id:
+		fallthrough
+	default:
+		key = argon2.IDKey(password, p.salt, p.Time, p.Memory, p.Thread, p.Keylen)
+	}
+
+	return key, nil
+}
+
 func (p *Argon2Params) generateFromParams(password []byte) ([]byte, error) {
 	var key []byte
 	var id, params string
@@ -186,7 +209,7 @@ func (p *Argon2Params) generateFromParams(password []byte) ([]byte, error) {
 
 	err := p.validate(&argonMinParameters)
 	if err != nil {
-		return nil, ErrUnsafe
+		return nil, err
 	}
 
 	// need to b64.
@@ -194,7 +217,7 @@ func (p *Argon2Params) generateFromParams(password []byte) ([]byte, error) {
 	salt64 := base64Encode(p.salt)
 
 	// params
-	if !p.masked {
+	if !p.Masked {
 		params = fmt.Sprintf("%c%d%c%d%c%d%c%d",
 			separatorRune, p.Time,
 			separatorRune, p.Memory,
@@ -237,7 +260,7 @@ func (p *Argon2Params) getSalt() error {
 	p.salt = make([]byte, p.Saltlen)
 	n, err := rand.Read(p.salt)
 	if err != nil || n != int(p.Saltlen) {
-		return err
+		return ErrHash
 	}
 	return nil
 }

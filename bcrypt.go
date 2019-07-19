@@ -15,7 +15,20 @@ const (
 
 // BcryptParams are the parameters for the bcrypt key derivation.
 type BcryptParams struct {
-	Cost int
+	Cost   int
+	Masked bool // XXX UNUSED
+}
+
+func newBcryptParamsFromHash(hashed []byte) (*BcryptParams, error) {
+	hashCost, err := bcrypt.Cost(hashed)
+	if err != nil {
+		return nil, err
+	}
+
+	bp := BcryptParams{
+		Cost: hashCost,
+	}
+	return &bp, nil
 }
 
 func (bp *BcryptParams) generateFromPassword(password []byte) ([]byte, error) {
@@ -23,5 +36,14 @@ func (bp *BcryptParams) generateFromPassword(password []byte) ([]byte, error) {
 }
 
 func (bp *BcryptParams) compare(hashed, password []byte) error {
-	return bcrypt.CompareHashAndPassword(hashed, password)
+	hashCost, err := bcrypt.Cost(hashed)
+	if err != nil || hashCost != bp.Cost {
+		return ErrMismatch
+	}
+
+	err = bcrypt.CompareHashAndPassword(hashed, password)
+	if err != nil {
+		return ErrMismatch
+	}
+	return nil
 }
