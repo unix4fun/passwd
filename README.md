@@ -1,5 +1,6 @@
-# THIS IS A NON IMPORTABLE GITHUB MIRROR OF THE PROJECT LOCATED AT GIT.SR.HT/~eau/passwd
-# TEMPORARY for migrating projects to it.
+# IMPORTANT
+THIS IS A NON IMPORTABLE GITHUB MIRROR OF THE PROJECT LOCATED AT https://git.sr.ht/~eau/passwd
+THIS REPO WILL NOT BE UPDATED, it is just for migration to NOT break imports.
 
 [![Documentation](https://godoc.org/git.sr.ht/~eau/passwd?status.svg)](http://godoc.org/git.sr.ht/~eau/passwd)
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
