@@ -1,5 +1,5 @@
 # IMPORTANT
-THIS IS A NON IMPORTABLE GITHUB MIRROR OF THE PROJECT LOCATED AT https://git.sr.ht/~eau/passwd
+THIS IS A NON IMPORTABLE GITHUB MIRROR OF THE PROJECT LOCATED AT https://github.com/ermites-io/passwd
 THIS REPO WILL NOT BE UPDATED, it is just for migration.
 
 [![Documentation](https://godoc.org/git.sr.ht/~eau/passwd?status.svg)](http://godoc.org/git.sr.ht/~eau/passwd)
